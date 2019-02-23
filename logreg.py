@@ -2,9 +2,12 @@ from sklearn.datasets import load_iris
 from matplotlib import pyplot as plt
 from numpy import exp, dot, log, ones, zeros, concatenate, linspace
 from sklearn.model_selection import train_test_split
+from matplotlib.animation import FuncAnimation
+from copy import deepcopy
+from numpy import log
 
 
-def plot_iris(X, y, type_):
+def plot_iris(X, y, type_, display=False):
     red = [X[i] for i in range(len(y)) if y[i] == 0]
     blue = [X[i] for i in range(len(y)) if y[i] == 1]
     x1 = [x[0] for x in red]
@@ -16,13 +19,14 @@ def plot_iris(X, y, type_):
     plt.xlabel("x1")
     plt.ylabel("x2")
     plt.figtext(0.5, 0, "Fig. 1 - {} data".format(type_), wrap=True, horizontalalignment='center', fontsize=9)
-    plt.show()
+    if display:
+        plt.show()
 
 
-def plot_iris_with_boundaries(X, y, weights):
+def plot_iris_with_boundaries(X, y, weights, display=False):
     x = linspace(4, 8)
     plt.plot(x, -(weights[1]/weights[2]*x + weights[0]/weights[2]))
-    plot_iris(X, y, "Total")
+    plot_iris(X, y, "Total", display)
 
 
 class LogisticRegression(object):
@@ -33,6 +37,7 @@ class LogisticRegression(object):
         self.fit_intercept = fit_intercept
         self.verbose = verbose
         self.theta = None
+        self.thetas = []
 
     # we add a vector of ones as intercept in the X matrix  (we have another weight w0 for this intercept "feature")
     @staticmethod
@@ -72,15 +77,19 @@ class LogisticRegression(object):
             X = LogisticRegression.__add_intercept(X)
         # weights initialization
         self.theta = zeros(X.shape[1])
+        to_save = [int(z * log(z)) for z in range(1, 200)][10:]
+        print(to_save)
         for i in range(self.num_iter):
             z = LogisticRegression.__get_z(X, self.theta)
             h = LogisticRegression.__sigmoid(z)
             gradient = LogisticRegression.__loss_gradient(X, y, h)
             self.__update_theta(gradient)
-            if self.verbose and i % 10000 == 0:
+            if self.verbose and i in to_save:
+                self.thetas.append(deepcopy(self.theta))
                 z = LogisticRegression.__get_z(X, self.theta)
                 h = LogisticRegression.__sigmoid(z)
                 print(f'loss: {LogisticRegression.__loss(h, y)} \t')
+        return self.thetas, to_save
 
     def predict_prob(self, X):
         if self.fit_intercept:
@@ -96,14 +105,43 @@ def main():
     X = iris.data[:, :2]  # two dimension out of 4
     y = (iris.target != 0) * 1  # flattening from 3 classes to 2 classes
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.28, random_state=11)
-    plot_iris(X_train, y_train, "Train")
-    plot_iris(X_test, y_test, "Test")
+    #plot_iris(X_train, y_train, "Train")
+    #plot_iris(X_test, y_test, "Test")
     lr = LogisticRegression(learning_rate=0.1, num_iterations=300000, verbose=True)
-    lr.fit(X_train, y_train)
+    weights, to_save = lr.fit(X_train, y_train)
     preds = lr.predict(X_test)
     print((preds == y_test).mean())
     vector_weights = lr.theta
     print(vector_weights)
-    plot_iris_with_boundaries(X, y, vector_weights)
+
+    fig, ax = plt.subplots()
+    plt.xlabel("x1")
+    plt.ylabel("x2")
+    red = [X[i] for i in range(len(y)) if y[i] == 0]
+    blue = [X[i] for i in range(len(y)) if y[i] == 1]
+    x1 = [x[0] for x in red]
+    x2 = [x[1] for x in red]
+    ax.scatter(x1, x2, color="red")
+    x1 = [x[0] for x in blue]
+    x2 = [x[1] for x in blue]
+    ax.scatter(x1, x2, color="blue")
+    x = linspace(4, 8)
+    line, = ax.plot(x, -((weights[0][1] / weights[0][2]) * x + weights[0][0] / weights[0][2]), 'b-', linewidth=2)
+
+    def update_plot(i):
+        # print(i)
+        # print("WEIGHTS")
+        # print(-((weights[i][1] / weights[i][2]) * x + weights[i][0] / weights[i][2]))
+        print("X+{}".format(i))
+        # print(x+i)
+        line.set_data(x, -((weights[i][1] / weights[i][2]) * x + weights[i][0] / weights[i][2]))
+        plt.title("Iteration {}".format(to_save[i]))
+        return line, ax
+
+    anim = FuncAnimation(fig, update_plot, frames=range(len(weights)), interval=200)
+    anim.save("test.gif", dpi=80, writer='imagemagick')
+    plt.show()
+    # plot_iris_with_boundaries(X, y, vector_weights, True)
+
 
 main()
